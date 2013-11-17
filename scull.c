@@ -1,3 +1,14 @@
+/* Copyrighting or licensing it doesn't make sense to me, ask psankar.
+ * ----------------------------------------------------------------------------
+ * Purpose: scull device/driver as sprinkled in 3rd chapter of O'REILLY's LDD.
+ * ----------------------------------------------------------------------------
+ * Written by : Sankar P @ https://github.com/psankar/scull
+ * Modified by: Anubhav S @ https://github.com/IAmAnubhavSaini/scull
+ * ----------------------------------------------------------------------------
+ * I was going to write it for myself, then "don't reinvent wheel" kicked in, 
+ * and I found that psankar already had solved this problem. So I forked!
+ */
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -10,13 +21,13 @@
 #define COUNT_OF_CONTIGOUS_DEVICES 4
 
 /* Device that we will use */
-dev_t helloworld_device;
+dev_t my_scull_dev;
 
 /* cdev structure that we will use to add/remove the device to the kernel */
 struct cdev cdev;
 
 /* The core datastructure that will hold the data for our device */
-char *helloworld_driver_data = NULL;
+char *my_scull_dev_data = NULL;
 
 int helloworld_driver_open(struct inode *inode, struct file *filep)
 {
@@ -31,7 +42,7 @@ int helloworld_driver_release(struct inode *inode, struct file *filep)
 ssize_t helloworld_driver_read(struct file * filep, char *buff, size_t count, loff_t * offp)
 {
 	int device_data_length;
-	device_data_length = strlen(helloworld_driver_data);
+	device_data_length = strlen(my_scull_dev_data);
 
 	/* No more data to read. */
 	if (*offp >= device_data_length)
@@ -44,8 +55,8 @@ ssize_t helloworld_driver_read(struct file * filep, char *buff, size_t count, lo
 		count = device_data_length;
 
 	/* function to copy kernel space buffer to user space */
-	if (copy_to_user(buff, helloworld_driver_data, count) != 0) {
-		printk(KERN_ALERT "Kernel Space to User Space copy failure");
+	if (copy_to_user(buff, my_scull_dev_data, count) != 0) {
+		printk(KERN_ALERT "Kernel Space to User Space copy failure\n");
 		return -EFAULT;
 	}
 
@@ -59,15 +70,15 @@ ssize_t helloworld_driver_read(struct file * filep, char *buff, size_t count, lo
 ssize_t helloworld_driver_write(struct file * filep, const char *buff, size_t count, loff_t * offp)
 {
 	/* Free the previouosly stored data */
-	if (helloworld_driver_data)
-		kfree(helloworld_driver_data);
+	if (my_scull_dev_data)
+		kfree(my_scull_dev_data);
 
 	/* Allocate new memory for holding the new data */
-	helloworld_driver_data = kmalloc((count * (sizeof(char *))), GFP_KERNEL);
+	my_scull_dev_data = kmalloc((count * (sizeof(char *))), GFP_KERNEL);
 
 	/* function to copy user space buffer to kernel space */
-	if (copy_from_user(helloworld_driver_data, buff, count) != 0) {
-		printk(KERN_ALERT "User Space to Kernel Space copy failure");
+	if (copy_from_user(my_scull_dev_data, buff, count) != 0) {
+		printk(KERN_ALERT "User Space to Kernel Space copy failure\n");
 		return -EFAULT;
 	}
 
@@ -75,7 +86,7 @@ ssize_t helloworld_driver_write(struct file * filep, const char *buff, size_t co
 	 * Last character will get overwritten by a \0. Incase of an actual file,
 	 * we will probably update the file size, IIUC.
 	 */
-	helloworld_driver_data [count] = '\0';
+	my_scull_dev_data [count] = '\0';
 
 	/* Return the number of bytes actually written. */
 	return count;
@@ -95,26 +106,26 @@ static int helloworld_driver_init(void)
 {
 	int err;
 
-	printk(KERN_INFO "Hello World");
+	printk(KERN_INFO "Hello World from SCULL\n");
 
 	/* Allocate a dynamic device number for your driver. If you want to hardcode a fixed major number for your 
 	 * driver, you should use different APIs 'register_chrdev_region', 'MKDEV'. But the following is better. */
-	if (!alloc_chrdev_region(&helloworld_device, FIRST_MINOR_NUMBER, COUNT_OF_CONTIGOUS_DEVICES, "HelloWorldDriver")) {
-		printk(KERN_INFO "Device Number successfully allocated.");
+	if (!alloc_chrdev_region(&my_scull_dev, FIRST_MINOR_NUMBER, COUNT_OF_CONTIGOUS_DEVICES, "HelloWorldDriver")) {
+		printk(KERN_INFO "Device Number successfully allocated.\n");
 		/* If you do a cat /proc/devices you should be able to find our Driver registered. */
 		cdev_init(&cdev, &helloworld_driver_fops);
 		cdev.owner = THIS_MODULE;
-		err = cdev_add(&cdev, helloworld_device, COUNT_OF_CONTIGOUS_DEVICES);
+		err = cdev_add(&cdev, my_scull_dev, COUNT_OF_CONTIGOUS_DEVICES);
 		if (err)
 			printk(KERN_NOTICE "Error [%d] adding HelloWorldDriver", err);
 
 		/* 100 below is an approximation of the number of chars in the initial string */
-		helloworld_driver_data = kmalloc(((100 * sizeof(char *))), GFP_KERNEL);
+		my_scull_dev_data = kmalloc(((100 * sizeof(char *))), GFP_KERNEL);
 		/* the initial string, so that the first cat on our device won't be empty */
-		strcpy(helloworld_driver_data, "Let there be peace and happiness");
+		strcpy(my_scull_dev_data, "Let there be peace and happiness");
 
 	} else
-		printk(KERN_ALERT "HelloWorldDriver could not get a Device number");
+		printk(KERN_ALERT "HelloWorldDriver could not get a Device number\n");
 
 	return 0;
 }
@@ -122,13 +133,12 @@ static int helloworld_driver_init(void)
 /* Unloading function for the kernel module */
 static void helloworld_driver_exit(void)
 {
-	printk(KERN_INFO "Goodbye World");
-
 	cdev_del(&cdev);
 
 	/* Free the device number when the driver is no longer available */
-	unregister_chrdev_region(helloworld_device, COUNT_OF_CONTIGOUS_DEVICES);
+	unregister_chrdev_region(my_scull_dev, COUNT_OF_CONTIGOUS_DEVICES);
 
+	printk(KERN_INFO "Goodbye World\n");
 }
 
 module_init(helloworld_driver_init);
